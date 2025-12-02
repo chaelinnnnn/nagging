@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Planet</title>
+
+  <!-- Unity CSS -->
+  <link rel="stylesheet" href="TemplateData/style.css">
+
+  <style>
+    body { margin:0; overflow:hidden; }
+    #input_video { display:none; }
+  </style>
+
+  <!-- Unity Loader -->
+  <script src="Build/planet.loader.js"></script>
+</head>
+
+<body>
+
+  <div id="unity-container" class="unity-desktop">
+    <canvas id="unity-canvas"></canvas>
+
+    <div id="unity-loading-bar">
+      <div id="unity-logo"></div>
+      <div id="unity-progress-bar-empty">
+        <div id="unity-progress-bar-full"></div>
+      </div>
+    </div>
+
+    <div id="unity-warning"></div>
+  </div>
+
+  <!-- Mediapipe video -->
+  <video id="input_video" playsinline></video>
+
+  <!-- Unity Init -->
+  <script>
+    createUnityInstance(document.querySelector("#unity-canvas"), {
+      dataUrl: "Build/planet.data",
+      frameworkUrl: "Build/planet.framework.js",
+      codeUrl: "Build/planet.wasm",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "MyCompany",
+      productName: "Planet",
+      productVersion: "1.0",
+    }).then((instance) => {
+      window.unityInstance = instance;
+      console.log("Unity Loaded");
+    });
+  </script>
+
+  <!-- Mediapipe -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <!-- Mediapipe Logic (DOMContentLoaded fix) -->
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      console.log("DOM Ready");
+
+      const video = document.getElementById("input_video");
+
+      if (!video) {
+        console.error("VIDEO ELEMENT NOT FOUND");
+        return;
+      }
+
+      const holistic = new Holistic({
+        locateFile: (file) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
+      });
+
+      holistic.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      holistic.onResults((results) => {
+        if (!results.poseLandmarks || !window.unityInstance) return;
+
+        const R = results.poseLandmarks[16];
+        const L = results.poseLandmarks[15];
+        const nose = results.poseLandmarks[0];
+
+        const isNodding = nose.y < 0.45;
+
+        window.unityInstance.SendMessage(
+          "WebSocketReceiver",
+          "ReceiveFromWeb",
+          JSON.stringify({
+            rh_x: R.x,
+            rh_y: R.y,
+            rh_z: R.z,
+            lh_x: L.x,
+            lh_y: L.y,
+            is_nodding: isNodding ? 1 : 0
+          })
+        );
+      });
+
+      const camera = new Camera(video, {
+        onFrame: async () => {
+          await holistic.send({ image: video });
+        },
+        width: 640,
+        height: 480,
+      });
+
+      camera.start().catch(err => {
+        alert("Failed to acquire camera feed: " + err);
+        console.error(err);
+      });
+    });
+  </script>
+
+</body>
+</html>
+
+<style>
+ html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+#unity-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#unity-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+</style>
