@@ -1,146 +1,373 @@
+
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="ko">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Planet</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>명절 잔소리 인터랙티브</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        #canvas {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            background: #000;
+        }
+        
+        .upload-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 100;
+            font-size: 12px;
+        }
+        
+        .upload-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.9);
+        }
 
-  <!-- Unity CSS -->
-  <link rel="stylesheet" href="TemplateData/style.css">
-
-  <style>
-    body { margin:0; overflow:hidden; }
-    #input_video { display:none; }
-  </style>
-
-  <!-- Unity Loader -->
-  <script src="Build/planet.loader.js"></script>
+        input[type="file"] {
+            display: none;
+        }
+        
+        .file-counter {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 500;
+            z-index: 100;
+            font-size: 12px;
+        }
+    </style>
 </head>
-
 <body>
-
-  <div id="unity-container" class="unity-desktop">
-    <canvas id="unity-canvas"></canvas>
-
-    <div id="unity-loading-bar">
-      <div id="unity-logo"></div>
-      <div id="unity-progress-bar-empty">
-        <div id="unity-progress-bar-full"></div>
-      </div>
-    </div>
-
-    <div id="unity-warning"></div>
-  </div>
-
-  <!-- Mediapipe video -->
-  <video id="input_video" playsinline></video>
-
-  <!-- Unity Init -->
-  <script>
-    createUnityInstance(document.querySelector("#unity-canvas"), {
-      dataUrl: "Build/planet.data",
-      frameworkUrl: "Build/planet.framework.js",
-      codeUrl: "Build/planet.wasm",
-      streamingAssetsUrl: "StreamingAssets",
-      companyName: "MyCompany",
-      productName: "Planet",
-      productVersion: "1.0",
-    }).then((instance) => {
-      window.unityInstance = instance;
-      console.log("Unity Loaded");
-    });
-  </script>
-
-  <!-- Mediapipe -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-
-  <!-- Mediapipe Logic (DOMContentLoaded fix) -->
-  <script>
-    window.addEventListener("DOMContentLoaded", () => {
-      console.log("DOM Ready");
-
-      const video = document.getElementById("input_video");
-
-      if (!video) {
-        console.error("VIDEO ELEMENT NOT FOUND");
-        return;
-      }
-
-      const holistic = new Holistic({
-        locateFile: (file) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
-      });
-
-      holistic.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
-
-      holistic.onResults((results) => {
-        if (!results.poseLandmarks || !window.unityInstance) return;
-
-        const R = results.poseLandmarks[16];
-        const L = results.poseLandmarks[15];
-        const nose = results.poseLandmarks[0];
-
-        const isNodding = nose.y < 0.45;
-
-        window.unityInstance.SendMessage(
-          "WebSocketReceiver",
-          "ReceiveFromWeb",
-          JSON.stringify({
-            rh_x: R.x,
-            rh_y: R.y,
-            rh_z: R.z,
-            lh_x: L.x,
-            lh_y: L.y,
-            is_nodding: isNodding ? 1 : 0
-          })
-        );
-      });
-
-      const camera = new Camera(video, {
-        onFrame: async () => {
-          await holistic.send({ image: video });
-        },
-        width: 640,
-        height: 480,
-      });
-
-      camera.start().catch(err => {
-        alert("Failed to acquire camera feed: " + err);
-        console.error(err);
-      });
-    });
-  </script>
-
+    <canvas id="canvas"></canvas>
+    
+    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+        오디오 업로드
+    </button>
+    <input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.wav,.ogg" multiple>
+    
+    <div class="file-counter" id="fileCounter">파일을 업로드하세요</div>
+    
+    <script>
+        let audioFiles = [];
+        let audioElements = [];
+        let currentIndex = 0;
+        let words = [];
+        let animationFrame;
+        
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 13개 단어만 사용
+        const baseWords = [
+            '결혼은', '언제', '할거야?', '취업준비는', '잘 되고 있어?',
+            '애는', '언제', '낳을거야?', '요즘', '월급은',
+            '얼마나 받아?', '반에서', '몇 등이나 하니?'
+        ];
+        
+        // 더 다양한 색상 팔레트 (밝은색 + 어두운색)
+        const colors = [
+            // 밝은 색상
+            '#FF6B9D', '#FFD32A', '#FFFA65', '#FFA502', '#FF6348',
+            '#4CD137', '#00D2D3', '#55E6C1', '#00B894', '#1abc9c',
+            '#54A0FF', '#5F27CD', '#A29BFE', '#FDA7DF', '#D980FA',
+            '#ff6b81', '#ffa502', '#26de81', '#20bf6b', '#0fb9b1',
+            '#45aaf2', '#4b7bec', '#a55eea', '#778ca3', '#4b6584',
+            // 어두운 색상
+            '#2d3436', '#636e72', '#574b90', '#8854d0', '#3c40c6',
+            '#05c46b', '#0fbcf9', '#3c6382', '#596275', '#303952',
+            '#833471', '#6c5ce7', '#00b894', '#fdcb6e', '#e17055',
+            '#d63031', '#e84393', '#2d3436', '#636e72', '#b2bec3'
+        ];
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            createWordLayout();
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        // 단어 레이아웃 생성
+        function createWordLayout() {
+            words = [];
+            const padding = 15;
+            const fontSize = 24;
+            
+            let x = padding;
+            let y = padding;
+            let rowHeight = 0;
+            
+            let wordIndex = 0;
+            while (y < canvas.height + 100) {
+                const word = baseWords[wordIndex % baseWords.length];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                
+                ctx.font = `500 ${fontSize}px 'Noto Sans KR'`;
+                const metrics = ctx.measureText(word);
+                const width = metrics.width + padding * 2;
+                const height = fontSize + padding * 2;
+                
+                if (x + width > canvas.width - padding) {
+                    x = padding;
+                    y += rowHeight + 8;
+                    rowHeight = 0;
+                }
+                
+                words.push({
+                    text: word,
+                    x: x,
+                    y: y,
+                    width: width,
+                    height: height,
+                    fontSize: fontSize,
+                    color: color,
+                    active: false,
+                    // 애니메이션
+                    flickerTime: Math.random() * 1000,
+                    flickerSpeed: 0.5 + Math.random() * 1.0,
+                    // 슬라이딩 (100% - 모두 적용, 시간차)
+                    isAnimated: true,
+                    slideOffset: 0,
+                    slideSpeed: 0.4 + Math.random() * 0.8,
+                    slideDirection: Math.random() > 0.5 ? 1 : -1,
+                    slideDelay: Math.random() * 10000, // 0~10초 시간차
+                    // 박스 사라지는 효과 (100% - 모두 적용, 시간차)
+                    hasBoxDisappear: true,
+                    boxDisappearTime: Math.random() * 5000, // 0~5초 시간차
+                    boxVisible: true,
+                    textColorWhenNoBox: colors[Math.floor(Math.random() * colors.length)],
+                    // 완전히 사라지는 효과 (100% - 모두 적용, 시간차)
+                    hasCompleteDisappear: true,
+                    disappearTime: Math.random() * 8000, // 0~8초 시간차
+                    disappearDelay: Math.random() * 5000, // 추가 지연
+                    isVisible: true,
+                    colorChangeCounter: 0
+                });
+                
+                x += width + 8;
+                rowHeight = Math.max(rowHeight, height);
+                wordIndex++;
+            }
+            
+            // 애니메이션 시작
+            if (!animationFrame) {
+                animate();
+            }
+        }
+        
+        // 애니메이션 루프
+        function animate() {
+            drawWords();
+            animationFrame = requestAnimationFrame(animate);
+        }
+        
+        // 단어 그리기
+        function drawWords() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const time = Date.now();
+            
+            words.forEach(word => {
+                // 완전히 사라지는 효과 (시간차 적용)
+                if (word.hasCompleteDisappear && !word.active) {
+                    const adjustedTime = time + word.disappearDelay;
+                    const cycle = (adjustedTime + word.disappearTime) % 5000; // 5초 주기
+                    word.isVisible = cycle > 1200; // 1.2초간 완전 사라짐
+                }
+                
+                // 사라진 상태면 그리지 않음
+                if (!word.isVisible) return;
+                
+                // 박스 사라지는 효과 (시간차 적용)
+                if (word.hasBoxDisappear && !word.active) {
+                    const cycle = (time + word.boxDisappearTime) % 4000; // 4초 주기
+                    word.boxVisible = cycle > 1000; // 1초간 박스 사라짐
+                    
+                    if (!word.boxVisible && word.colorChangeCounter !== Math.floor(time / 4000)) {
+                        word.textColorWhenNoBox = colors[Math.floor(Math.random() * colors.length)];
+                        word.colorChangeCounter = Math.floor(time / 4000);
+                    }
+                }
+                
+                // 슬라이딩 (시간차 적용)
+                if (word.isAnimated && !word.active) {
+                    const adjustedTime = time + word.slideDelay;
+                    // 10초마다 슬라이딩 활성화 (3초간)
+                    const slideCycle = adjustedTime % 10000;
+                    if (slideCycle < 3000) {
+                        word.slideOffset += word.slideSpeed * word.slideDirection;
+                        if (word.slideOffset > 25 || word.slideOffset < -25) {
+                            word.slideDirection *= -1;
+                        }
+                    } else {
+                        // 슬라이딩 안 할 때는 원위치로
+                        word.slideOffset *= 0.9;
+                    }
+                }
+                
+                ctx.save();
+                
+                // 깜빡임
+                let flickerOpacity;
+                if (word.active) {
+                    flickerOpacity = 1.0;
+                } else {
+                    const flicker = Math.sin((time + word.flickerTime) * word.flickerSpeed * 0.01);
+                    flickerOpacity = 0.25 + (flicker * 0.15);
+                }
+                
+                // 배경 박스 (각진 네모)
+                if (word.boxVisible || word.active) {
+                    if (word.active) {
+                        ctx.shadowColor = '#ff0000';
+                        ctx.shadowBlur = 35;
+                        ctx.fillStyle = '#ff0000';
+                    } else {
+                        ctx.shadowColor = word.color;
+                        ctx.shadowBlur = 8;
+                        ctx.fillStyle = adjustAlpha(word.color, flickerOpacity);
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.rect(word.x, word.y, word.width, word.height);
+                    ctx.fill();
+                }
+                
+                ctx.shadowBlur = 0;
+                
+                // 텍스트
+                const fontWeight = word.active ? 700 : 500;
+                
+                if (word.active) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowColor = '#ff0000';
+                    ctx.shadowBlur = 15;
+                } else if (!word.boxVisible) {
+                    ctx.fillStyle = word.textColorWhenNoBox;
+                    ctx.shadowColor = word.textColorWhenNoBox;
+                    ctx.shadowBlur = 8;
+                } else {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                }
+                
+                ctx.font = `${fontWeight} ${word.fontSize}px 'Noto Sans KR'`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                const textX = word.x + word.width / 2 + word.slideOffset;
+                const textY = word.y + word.height / 2;
+                ctx.fillText(word.text, textX, textY);
+                
+                ctx.restore();
+            });
+        }
+        
+        function adjustAlpha(color, alpha) {
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+        
+        // 파일 업로드
+        const fileInput = document.getElementById('fileInput');
+        const fileCounter = document.getElementById('fileCounter');
+        
+        fileInput.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files);
+            audioFiles = [];
+            audioElements = [];
+            
+            for (let file of files) {
+                if (file.type.startsWith('audio/')) {
+                    const fileName = file.name.replace(/\.[^/.]+$/, '');
+                    const parts = fileName.split('-');
+                    const word = parts.length > 1 ? parts.slice(1).join('-') : fileName;
+                    
+                    const audio = new Audio(URL.createObjectURL(file));
+                    await new Promise(resolve => {
+                        audio.addEventListener('loadedmetadata', resolve);
+                    });
+                    
+                    audioElements.push({
+                        audio: audio,
+                        word: word,
+                        duration: audio.duration
+                    });
+                    
+                    audioFiles.push({ file, word });
+                    console.log(`로드됨: ${file.name} → "${word}"`);
+                }
+            }
+            
+            fileCounter.textContent = `${audioFiles.length}개 파일`;
+            
+            if (audioElements.length > 0) {
+                currentIndex = 0;
+                playSequence();
+            }
+        });
+        
+        // 자동 재생 시퀀스
+        function playSequence() {
+            if (currentIndex >= audioElements.length) {
+                currentIndex = 0;
+            }
+            
+            const current = audioElements[currentIndex];
+            
+            // 해당 단어들만 활성화
+            words.forEach(w => {
+                w.active = (w.text === current.word);
+            });
+            
+            // 재생
+            current.audio.currentTime = 0;
+            current.audio.play();
+            
+            // 다음 곡으로
+            current.audio.onended = () => {
+                currentIndex++;
+                if (currentIndex < audioElements.length) {
+                    playSequence();
+                } else {
+                    // 모두 재생 완료
+                    currentIndex = 0;
+                    words.forEach(w => w.active = false);
+                }
+            };
+        }
+    </script>
 </body>
 </html>
-
-<style>
- html, body {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-}
-
-#unity-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
-
-#unity-canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-</style>
