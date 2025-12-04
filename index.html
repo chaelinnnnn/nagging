@@ -120,10 +120,24 @@
             let y = padding;
             let rowHeight = 0;
             
+            // 먼저 각 단어를 최소 5번씩 배치
+            let guaranteedWords = [];
+            baseWords.forEach(word => {
+                for (let i = 0; i < 5; i++) {
+                    guaranteedWords.push(word);
+                }
+            });
+            
+            // 섞기
+            guaranteedWords.sort(() => Math.random() - 0.5);
+            
             let wordIndex = 0;
             while (y < canvas.height + 100) {
-                // 완전 랜덤 선택
-                const word = baseWords[Math.floor(Math.random() * baseWords.length)];
+                // 보장된 단어 먼저 사용, 그 다음 랜덤
+                const word = wordIndex < guaranteedWords.length 
+                    ? guaranteedWords[wordIndex]
+                    : baseWords[Math.floor(Math.random() * baseWords.length)];
+                    
                 const color = grayColors[Math.floor(Math.random() * grayColors.length)];
                 
                 ctx.font = `500 ${fontSize}px 'Noto Sans KR'`;
@@ -340,14 +354,32 @@
             
             const current = audioElements[currentIndex];
             
-            console.log('재생 시작:', current.word);
+            console.log('=== 재생 시작 ===');
+            console.log('오디오 단어:', current.word);
+            console.log('오디오 단어 길이:', current.word.length);
+            console.log('오디오 단어 charCodes:', Array.from(current.word).map(c => c.charCodeAt(0)));
+            
+            // 화면의 단어들 확인
+            const uniqueWords = [...new Set(words.map(w => w.text))];
+            console.log('화면의 모든 단어들:', uniqueWords);
             
             // 해당 단어들만 활성화
             words.forEach(w => {
-                w.active = (w.text === current.word);
+                const match = (w.text === current.word);
+                if (w.text === '결혼은') {
+                    console.log('결혼은 단어 체크:', {
+                        화면: w.text,
+                        오디오: current.word,
+                        매칭: match,
+                        화면길이: w.text.length,
+                        오디오길이: current.word.length
+                    });
+                }
+                w.active = match;
             });
             
-            console.log('활성화된 단어 수:', words.filter(w => w.active).length);
+            const activeCount = words.filter(w => w.active).length;
+            console.log('활성화된 단어 수:', activeCount);
             
             // 재생
             current.audio.currentTime = 0;
