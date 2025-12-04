@@ -86,11 +86,11 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         
-        // 13개 단어만 사용
+        // 13개 단어만 사용 (띄어쓰기 제거)
         const baseWords = [
-            '결혼은', '언제', '할거야?', '취업준비는', '잘 되고 있어?',
+            '결혼은', '언제', '할거야?', '취업준비는', '잘되고있어?',
             '애는', '언제', '낳을거야?', '요즘', '월급은',
-            '얼마나 받아?', '반에서', '몇 등이나 하니?'
+            '얼마나받아?', '반에서', '몇등이나하니?'
         ];
         
         // 모노톤 회색 팔레트 (비활성용)
@@ -319,8 +319,26 @@
             for (let file of files) {
                 if (file.type.startsWith('audio/')) {
                     const fileName = file.name.replace(/\.[^/.]+$/, '');
-                    const parts = fileName.split('-');
-                    let word = parts.length > 1 ? parts.slice(1).join('-') : fileName;
+                    
+                    // 여러 패턴 지원:
+                    // "3-3. 지아이_낳을 거야?" → "낳을 거야?"
+                    // "지아이-결혼은" → "결혼은"
+                    let word = fileName;
+                    
+                    // 언더스코어로 분리 (있으면)
+                    if (word.includes('_')) {
+                        word = word.split('_').pop();
+                    } else if (word.includes('-')) {
+                        // 하이픈으로 분리
+                        const parts = word.split('-');
+                        word = parts.slice(1).join('-');
+                    }
+                    
+                    // 앞의 숫자 제거 (예: "3. 지아이" → "지아이")
+                    word = word.replace(/^\d+\.\s*/, '');
+                    
+                    // 띄어쓰기 제거 (화면 단어는 띄어쓰기 없음)
+                    word = word.replace(/\s+/g, '');
                     
                     // 한글 정규화 (NFC)
                     word = word.normalize('NFC');
