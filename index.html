@@ -11,18 +11,21 @@
             padding: 0;
             box-sizing: border-box;
         }
+        
         body {
             font-family: 'Noto Sans KR', sans-serif;
             background: #000;
             color: #fff;
             overflow: hidden;
         }
+        
         #canvas {
             width: 100vw;
             height: 100vh;
             display: block;
             background: #000;
         }
+        
         .loading {
             position: fixed;
             top: 50%;
@@ -35,287 +38,381 @@
     </style>
 </head>
 <body>
-<canvas id="canvas"></canvas>
-<div class="loading" id="loading">로딩 중...</div>
-
-<script>
-    let audioElements = [];
-    let currentIndex = 0;
-    let words = [];
-    let animationFrame;
-
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-
-    // 표시용 기본 문구 (한국어 단어들)
-    const baseWords = [
-        '결혼은', '언제', '할거야?', '취업준비는', '잘되고있어?',
-        '애는', '언제', '낳을거야?', '요즘', '월급은',
-        '얼마나받아?', '반에서', '몇등이나하니?'
-    ];
-
-    // 컬러 팔레트
-    const colors = [
-        '#FF6B9D', '#FFD32A', '#FFFA65', '#FFA502', '#FF6348',
-        '#4CD137', '#00D2D3', '#55E6C1', '#00B894', '#1abc9c',
-        '#54A0FF', '#5F27CD', '#A29BFE', '#FDA7DF', '#D980FA',
-        '#ff6b81', '#ffa502', '#26de81', '#20bf6b', '#0fb9b1',
-        '#45aaf2', '#4b7bec', '#a55eea', '#778ca3', '#4b6584',
-        '#2d3436', '#636e72', '#574b90', '#8854d0', '#3c40c6',
-        '#05c46b', '#0fbcf9', '#3c6382', '#596275', '#303952',
-        '#833471', '#6c5ce7', '#00b894', '#fdcb6e', '#e17055',
-        '#d63031', '#e84393', '#2d3436', '#636e72', '#b2bec3'
-    ];
-
-    // 🔥 새 영문 파일명 리스트 (최종 버전)
-    const audioFiles = [
-        // Richard
-        'richard-marriage.m4a', 'richard-when.m4a', 'richard-will.m4a',
-        'richard-job.m4a', 'richard-going.m4a', 'richard-baby.m4a',
-        'richard-have.m4a', 'richard-lately.m4a', 'richard-salary.m4a',
-        'richard-howmuch.m4a', 'richard-class.m4a', 'richard-rank.m4a',
-
-        // Bella
-        'bella-marriage.m4a', 'bella-when.m4a', 'bella-will.m4a',
-        'bella-job.m4a', 'bella-going.m4a', 'bella-baby.m4a',
-        'bella-have.m4a', 'bella-lately.m4a', 'bella-salary.m4a',
-        'bella-howmuch.m4a', 'bella-class.m4a', 'bella-rank.m4a',
-
-        // Serena
-        'serena-marriage.m4a', 'serena-when.m4a', 'serena-will.m4a',
-        'serena-job.m4a', 'serena-going.m4a', 'serena-baby.m4a',
-        'serena-have.m4a', 'serena-lately.m4a', 'serena-salary.m4a',
-        'serena-howmuch.m4a', 'serena-class.m4a', 'serena-rank.m4a',
-
-        // Gia
-        'gia-marriage.m4a', 'gia-when.m4a', 'gia-will.m4a',
-        'gia-job.m4a', 'gia-going.m4a', 'gia-baby.m4a',
-        'gia-have.m4a', 'gia-lately.m4a', 'gia-salary.m4a',
-        'gia-howmuch.m4a', 'gia-class.m4a', 'gia-rank.m4a',
-
-        // Seulgi
-        'seulgi-marriage.mp3', 'seulgi-when.mp3', 'seulgi-will.mp3',
-        'seulgi-job.mp3', 'seulgi-going.mp3', 'seulgi-baby.mp3',
-        'seulgi-have.mp3', 'seulgi-lately.mp3', 'seulgi-salary.mp3',
-        'seulgi-howmuch.mp3', 'seulgi-class.mp3', 'seulgi-rank.mp3',
-
-        // Roger
-        'roger-marriage.mp3', 'roger-when.mp3', 'roger-will.mp3',
-        'roger-job.mp3', 'roger-going.mp3', 'roger-baby.mp3',
-        'roger-lately.mp3', 'roger-salary.mp3', 'roger-howmuch.mp3',
-        'roger-class.mp3', 'roger-rank.mp3'
-    ];
-
-    function resizeCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        if (words.length > 0) drawWords();
-    }
-
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    // 🔥 초기화 함수
-    async function init() {
-        for (let filename of audioFiles) {
-            try {
-                const safeName = encodeURIComponent(filename);
-                const audio = new Audio(`audio/${safeName}`);
-
-                await new Promise(resolve => {
-                    audio.addEventListener("canplaythrough", resolve);
-                    audio.addEventListener("error", () => {
-                        console.error("Failed:", filename);
-                        resolve();
-                    });
-                    audio.load();
-                });
-
-                // 영어 파일명에서 단어 추출
-                let word = filename
-                    .replace(/\.(m4a|mp3)$/i, "")
-                    .split("-")
-                    .pop(); // ex: richard-marriage → "marriage"
-
-                audioElements.push({ audio, word });
-
-            } catch (err) {
-                console.error("Load error:", filename, err);
-            }
-        }
-
-        console.log("Loaded:", audioElements.length);
-
-        createWordLayout();
-        animate();
-
-        document.getElementById('loading').style.display = 'none';
-
-        if (audioElements.length > 0) playSequence();
-    }
-
-    // 단어 배치
-    function createWordLayout() {
-        words = [];
-        const padding = 15;
-        const fontSize = 24;
-
-        let x = padding, y = padding, rowHeight = 0;
-
-        let guaranteedWords = [];
-        baseWords.forEach(word => {
-            for (let i = 0; i < 5; i++) guaranteedWords.push(word);
-        });
-        guaranteedWords.sort(() => Math.random() - 0.5);
-
-        let index = 0;
-        while (y < canvas.height + 100) {
-            const word = index < guaranteedWords.length
-                ? guaranteedWords[index]
-                : baseWords[Math.floor(Math.random() * baseWords.length)];
-
-            const color = colors[Math.floor(Math.random() * colors.length)];
-
-            ctx.font = `500 ${fontSize}px 'Noto Sans KR'`;
-            const metrics = ctx.measureText(word);
-            const width = metrics.width + padding * 2;
-            const height = fontSize + padding * 2;
-
-            if (x + width > canvas.width - padding) {
-                x = padding;
-                y += rowHeight + 8;
-                rowHeight = 0;
-            }
-
-            words.push({
-                text: word,
-                x, y, width, height,
-                fontSize, color,
-                active: false,
-                flickerTime: Math.random() * 1000,
-                flickerSpeed: 0.5 + Math.random(),
-                slideOffset: 0,
-                slideSpeed: 0.4 + Math.random() * 0.8,
-                slideDirection: Math.random() > 0.5 ? 1 : -1,
-                slideDelay: Math.random() * 10000,
-                hasBoxDisappear: true,
-                boxDisappearTime: Math.random() * 5000,
-                boxVisible: true,
-                textColorWhenNoBox: colors[Math.floor(Math.random() * colors.length)],
-                hasCompleteDisappear: true,
-                disappearTime: Math.random() * 8000,
-                disappearDelay: Math.random() * 5000,
-                isVisible: true,
-                colorChangeCounter: 0
-            });
-
-            x += width + 8;
-            rowHeight = Math.max(rowHeight, height);
-            index++;
-        }
-    }
-
-    // 애니메이션
-    function animate() {
-        drawWords();
-        animationFrame = requestAnimationFrame(animate);
-    }
-
-    function drawWords() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const time = Date.now();
-
-        words.forEach(word => {
-            if (word.hasCompleteDisappear && !word.active) {
-                const cycle = (time + word.disappearDelay) % 5000;
-                word.isVisible = cycle > 1200;
-            }
-            if (!word.isVisible) return;
-
-            if (word.hasBoxDisappear && !word.active) {
-                const cycle = (time + word.boxDisappearTime) % 4000;
-                word.boxVisible = cycle > 1000;
-
-                if (!word.boxVisible) {
-                    word.textColorWhenNoBox = colors[Math.floor(Math.random() * colors.length)];
-                }
-            }
-
-            if (!word.active) {
-                const cycle = (time + word.slideDelay) % 10000;
-                if (cycle < 3000) {
-                    word.slideOffset += word.slideSpeed * word.slideDirection;
-                    if (word.slideOffset > 25 || word.slideOffset < -25) {
-                        word.slideDirection *= -1;
-                    }
-                } else {
-                    word.slideOffset *= 0.9;
-                }
-            }
-
-            ctx.save();
-
-            const flicker = Math.sin((time + word.flickerTime) * word.flickerSpeed * 0.01);
-            const opacity = word.active ? 1.0 : 0.25 + flicker * 0.15;
-
-            if (word.boxVisible || word.active) {
-                ctx.shadowColor = word.active ? "#ff0000" : word.color;
-                ctx.shadowBlur = word.active ? 35 : 8;
-                ctx.fillStyle = word.active
-                    ? "#ff0000"
-                    : adjustAlpha(word.color, opacity);
-
-                ctx.fillRect(word.x, word.y, word.width, word.height);
-            }
-
-            ctx.shadowBlur = 0;
-
-            ctx.font = `${word.active ? 700 : 500} ${word.fontSize}px 'Noto Sans KR'`;
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-
-            ctx.fillStyle = word.active
-                ? "#ffffff"
-                : word.boxVisible
-                    ? "rgba(255,255,255,0.85)"
-                    : word.textColorWhenNoBox;
-
-            const tx = word.x + word.width / 2 + word.slideOffset;
-            const ty = word.y + word.height / 2;
-
-            ctx.fillText(word.text, tx, ty);
-            ctx.restore();
-        });
-    }
-
-    function adjustAlpha(color, alpha) {
-        const r = parseInt(color.slice(1, 3), 16);
-        const g = parseInt(color.slice(3, 5), 16);
-        const b = parseInt(color.slice(5, 7), 16);
-        return `rgba(${r},${g},${b},${alpha})`;
-    }
-
-    // 🔥 자동 재생 기능
-    function playSequence() {
-        if (currentIndex >= audioElements.length) currentIndex = 0;
-
-        const current = audioElements[currentIndex];
-
-        // 영어 word가 "marriage", "when" 등
-        words.forEach(w => {
-            w.active = (w.text.includes(current.word) || current.word.includes(w.text.replace(/\?/g, "")));
-        });
-
-        current.audio.currentTime = 0;
-        current.audio.play().catch(err => console.error("재생 실패:", err));
-
-        current.audio.onended = () => {
-            currentIndex++;
-            playSequence();
+    <canvas id="canvas"></canvas>
+    <div class="loading" id="loading">로딩 중...</div>
+    
+    <script>
+        let audioElements = [];
+        let currentIndex = 0;
+        let words = [];
+        let animationFrame;
+        
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 13개 단어 (띄어쓰기 제거)
+        const baseWords = [
+            '결혼은', '언제', '할거야?', '취업준비는', '잘되고있어?',
+            '애는', '낳을거야?', '요즘', '월급은',
+            '얼마나받아?', '반에서', '몇등이나하니?'
+        ];
+        
+        // 컬러풀한 색상 팔레트
+        const colors = [
+            '#FF6B9D', '#FFD32A', '#FFFA65', '#FFA502', '#FF6348',
+            '#4CD137', '#00D2D3', '#55E6C1', '#00B894', '#1abc9c',
+            '#54A0FF', '#5F27CD', '#A29BFE', '#FDA7DF', '#D980FA',
+            '#ff6b81', '#ffa502', '#26de81', '#20bf6b', '#0fb9b1',
+            '#45aaf2', '#4b7bec', '#a55eea', '#778ca3', '#4b6584',
+            '#2d3436', '#636e72', '#574b90', '#8854d0', '#3c40c6',
+            '#05c46b', '#0fbcf9', '#3c6382', '#596275', '#303952',
+            '#833471', '#6c5ce7', '#00b894', '#fdcb6e', '#e17055',
+            '#d63031', '#e84393', '#2d3436', '#636e72', '#b2bec3'
+        ];
+        
+        // 영어 파일명 → 한글 단어 매핑
+        const wordMap = {
+            'marriage': '결혼은',
+            'when': '언제',
+            'will': '할거야?',
+            'job': '취업준비는',
+            'going': '잘되고있어?',
+            'baby': '애는',
+            'have': '낳을거야?',
+            'lately': '요즘',
+            'salary': '월급은',
+            'howmuch': '얼마나받아?',
+            'class': '반에서',
+            'rank': '몇등이나하니?'
         };
-    }
-
-    init();
-</script>
+        
+        // 오디오 파일 목록 (영어 파일명)
+        const audioFiles = [
+            'bella-marriage.m4a', 'bella-when.m4a', 'bella-will.m4a', 'bella-job.m4a',
+            'bella-going.m4a', 'bella-baby.m4a', 'bella-have.m4a', 'bella-lately.m4a',
+            'bella-salary.m4a', 'bella-howmuch.m4a', 'bella-class.m4a', 'bella-rank.m4a',
+            
+            'gia-marriage.m4a', 'gia-when.m4a', 'gia-will.m4a', 'gia-job.m4a',
+            'gia-going.m4a', 'gia-baby.m4a', 'gia-have.m4a', 'gia-lately.m4a',
+            'gia-salary.m4a', 'gia-howmuch.m4a', 'gia-class.m4a', 'gia-rank.m4a',
+            
+            'ricard-marriage.m4a', 'richard-when.m4a', 'richard-will.m4a', 'richard-job.m4a',
+            'richard-going.m4a', 'richard-baby.m4a', 'richard-have.m4a', 'richard-lately.m4a',
+            'richard-salary.m4a', 'richard-howmuch.m4a', 'richard-class.m4a', 'richard-rank.m4a',
+            
+            'serena-marriage.m4a', 'serena-when.m4a', 'serena-will.m4a', 'serena-job.m4a',
+            'serena-going.m4a', 'serena-baby.m4a', 'serena-have.m4a', 'serena-lately.m4a',
+            'serena-salary.m4a', 'serena-howmuch.m4a', 'serena-class.m4a', 'serena-rank.m4a',
+            
+            'seulgi-marriage.mp3', 'seulgi-when.mp3', 'seulgi-will.mp3', 'seulgi-job.mp3',
+            'seulgi-going.mp3', 'seulgi-baby.mp3', 'seulgi-have.mp3', 'seulgi-lately.mp3',
+            'seulgi-salary.mp3', 'seulgi-howmuch.mp3', 'seulgi-class.mp3', 'seulgi-rank.mp3',
+            
+            'roger-marriage.mp3', 'roger-when.mp3', 'roger-will.mp3', 'roger-job.mp3',
+            'roger-going.mp3', 'roger-baby.mp3', 'roger-lately.mp3',
+            'roger-salary.mp3', 'roger-howmuch.mp3', 'roger-class.mp3', 'roger-rank.mp3'
+        ];
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (words.length > 0) {
+                drawWords();
+            }
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        // 초기화
+        async function init() {
+            console.log('오디오 로드 시작...');
+            
+            // 오디오 파일 로드
+            for (let filename of audioFiles) {
+                // 파일명에서 단어 추출 (예: bella-marriage.m4a → marriage)
+                const parts = filename.replace(/\.(mp3|m4a)$/i, '').split('-');
+                const wordKey = parts[1]; // marriage, when, will, etc.
+                const koreanWord = wordMap[wordKey];
+                
+                if (!koreanWord) {
+                    console.warn(`단어 매핑 없음: ${wordKey}`);
+                    continue;
+                }
+                
+                try {
+                    const audio = new Audio(`audio/${filename}`);
+                    
+                    await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            reject(new Error('Timeout'));
+                        }, 5000);
+                        
+                        audio.addEventListener('canplaythrough', () => {
+                            clearTimeout(timeout);
+                            resolve();
+                        });
+                        audio.addEventListener('error', (e) => {
+                            clearTimeout(timeout);
+                            reject(e);
+                        });
+                        audio.load();
+                    });
+                    
+                    audioElements.push({
+                        audio: audio,
+                        word: koreanWord,
+                        filename: filename
+                    });
+                    
+                    console.log(`✓ ${filename} → ${koreanWord}`);
+                } catch (err) {
+                    console.error(`✗ ${filename}:`, err.message);
+                }
+            }
+            
+            console.log(`${audioElements.length}개 오디오 로드 완료`);
+            
+            // 단어 레이아웃 생성
+            createWordLayout();
+            
+            // 애니메이션 시작
+            animate();
+            
+            // 로딩 화면 제거
+            document.getElementById('loading').style.display = 'none';
+            
+            // 자동 재생 시작
+            if (audioElements.length > 0) {
+                // 사용자 클릭 필요 (브라우저 autoplay 정책)
+                document.body.addEventListener('click', () => {
+                    playSequence();
+                }, { once: true });
+                
+                // 화면에 안내 표시
+                const hint = document.createElement('div');
+                hint.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);color:#fff;font-size:18px;z-index:1000;';
+                hint.textContent = '화면을 클릭하여 시작하세요';
+                document.body.appendChild(hint);
+                
+                document.body.addEventListener('click', () => {
+                    hint.remove();
+                }, { once: true });
+            }
+        }
+        
+        // 단어 레이아웃 생성
+        function createWordLayout() {
+            words = [];
+            const padding = 15;
+            const fontSize = 24;
+            
+            let x = padding;
+            let y = padding;
+            let rowHeight = 0;
+            
+            // 각 단어 최소 5번씩 보장
+            let guaranteedWords = [];
+            baseWords.forEach(word => {
+                for (let i = 0; i < 5; i++) {
+                    guaranteedWords.push(word);
+                }
+            });
+            guaranteedWords.sort(() => Math.random() - 0.5);
+            
+            let wordIndex = 0;
+            while (y < canvas.height + 100) {
+                const word = wordIndex < guaranteedWords.length 
+                    ? guaranteedWords[wordIndex]
+                    : baseWords[Math.floor(Math.random() * baseWords.length)];
+                    
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                
+                ctx.font = `500 ${fontSize}px 'Noto Sans KR'`;
+                const metrics = ctx.measureText(word);
+                const width = metrics.width + padding * 2;
+                const height = fontSize + padding * 2;
+                
+                if (x + width > canvas.width - padding) {
+                    x = padding;
+                    y += rowHeight + 8;
+                    rowHeight = 0;
+                }
+                
+                words.push({
+                    text: word,
+                    x: x,
+                    y: y,
+                    width: width,
+                    height: height,
+                    fontSize: fontSize,
+                    color: color,
+                    active: false,
+                    flickerTime: Math.random() * 1000,
+                    flickerSpeed: 0.5 + Math.random() * 1.0,
+                    isAnimated: true,
+                    slideOffset: 0,
+                    slideSpeed: 0.4 + Math.random() * 0.8,
+                    slideDirection: Math.random() > 0.5 ? 1 : -1,
+                    slideDelay: Math.random() * 10000,
+                    hasBoxDisappear: true,
+                    boxDisappearTime: Math.random() * 5000,
+                    boxVisible: true,
+                    textColorWhenNoBox: colors[Math.floor(Math.random() * colors.length)],
+                    hasCompleteDisappear: true,
+                    disappearTime: Math.random() * 8000,
+                    disappearDelay: Math.random() * 5000,
+                    isVisible: true,
+                    colorChangeCounter: 0
+                });
+                
+                x += width + 8;
+                rowHeight = Math.max(rowHeight, height);
+                wordIndex++;
+            }
+        }
+        
+        // 애니메이션 루프
+        function animate() {
+            drawWords();
+            animationFrame = requestAnimationFrame(animate);
+        }
+        
+        // 단어 그리기
+        function drawWords() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const time = Date.now();
+            
+            words.forEach(word => {
+                // 완전히 사라지는 효과
+                if (word.hasCompleteDisappear && !word.active) {
+                    const adjustedTime = time + word.disappearDelay;
+                    const cycle = (adjustedTime + word.disappearTime) % 5000;
+                    word.isVisible = cycle > 1200;
+                }
+                
+                if (!word.isVisible) return;
+                
+                // 박스 사라지는 효과
+                if (word.hasBoxDisappear && !word.active) {
+                    const cycle = (time + word.boxDisappearTime) % 4000;
+                    word.boxVisible = cycle > 1000;
+                    
+                    if (!word.boxVisible && word.colorChangeCounter !== Math.floor(time / 4000)) {
+                        word.textColorWhenNoBox = colors[Math.floor(Math.random() * colors.length)];
+                        word.colorChangeCounter = Math.floor(time / 4000);
+                    }
+                }
+                
+                // 슬라이딩
+                if (word.isAnimated && !word.active) {
+                    const adjustedTime = time + word.slideDelay;
+                    const slideCycle = adjustedTime % 10000;
+                    if (slideCycle < 3000) {
+                        word.slideOffset += word.slideSpeed * word.slideDirection;
+                        if (word.slideOffset > 25 || word.slideOffset < -25) {
+                            word.slideDirection *= -1;
+                        }
+                    } else {
+                        word.slideOffset *= 0.9;
+                    }
+                }
+                
+                ctx.save();
+                
+                // 깜빡임
+                let flickerOpacity;
+                if (word.active) {
+                    flickerOpacity = 1.0;
+                } else {
+                    const flicker = Math.sin((time + word.flickerTime) * word.flickerSpeed * 0.01);
+                    flickerOpacity = 0.25 + (flicker * 0.15);
+                }
+                
+                // 배경 박스
+                if (word.boxVisible || word.active) {
+                    if (word.active) {
+                        ctx.shadowColor = '#ff0000';
+                        ctx.shadowBlur = 35;
+                        ctx.fillStyle = '#ff0000';
+                    } else {
+                        ctx.shadowColor = word.color;
+                        ctx.shadowBlur = 8;
+                        ctx.fillStyle = adjustAlpha(word.color, flickerOpacity);
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.rect(word.x, word.y, word.width, word.height);
+                    ctx.fill();
+                }
+                
+                ctx.shadowBlur = 0;
+                
+                // 텍스트
+                const fontWeight = word.active ? 700 : 500;
+                
+                if (word.active) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowColor = '#ff0000';
+                    ctx.shadowBlur = 15;
+                } else if (!word.boxVisible) {
+                    ctx.fillStyle = word.textColorWhenNoBox;
+                    ctx.shadowColor = word.textColorWhenNoBox;
+                    ctx.shadowBlur = 8;
+                } else {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                }
+                
+                ctx.font = `${fontWeight} ${word.fontSize}px 'Noto Sans KR'`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                const textX = word.x + word.width / 2 + word.slideOffset;
+                const textY = word.y + word.height / 2;
+                ctx.fillText(word.text, textX, textY);
+                
+                ctx.restore();
+            });
+        }
+        
+        function adjustAlpha(color, alpha) {
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+        
+        // 자동 재생 시퀀스
+        function playSequence() {
+            if (currentIndex >= audioElements.length) {
+                currentIndex = 0; // 루프
+            }
+            
+            const current = audioElements[currentIndex];
+            
+            console.log(`재생: ${current.filename} → ${current.word}`);
+            
+            // 해당 단어들만 활성화
+            words.forEach(w => {
+                w.active = (w.text === current.word);
+            });
+            
+            // 재생
+            current.audio.currentTime = 0;
+            current.audio.play().catch(err => {
+                console.error('재생 실패:', err);
+            });
+            
+            // 다음 곡으로
+            current.audio.onended = () => {
+                currentIndex++;
+                playSequence();
+            };
+        }
+        
+        // 초기화 시작
+        init();
+    </script>
 </body>
 </html>
