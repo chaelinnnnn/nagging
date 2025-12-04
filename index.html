@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -130,7 +129,8 @@
             
             let wordIndex = 0;
             while (y < canvas.height + 100) {
-                const word = baseWords[wordIndex % baseWords.length];
+                // 완전 랜덤 선택
+                const word = baseWords[Math.floor(Math.random() * baseWords.length)];
                 const color = colors[Math.floor(Math.random() * colors.length)];
                 
                 ctx.font = `500 ${fontSize}px 'Noto Sans KR'`;
