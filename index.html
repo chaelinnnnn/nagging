@@ -340,17 +340,26 @@
             
             const current = audioElements[currentIndex];
             
+            console.log('재생 시작:', current.word);
+            
             // 해당 단어들만 활성화
             words.forEach(w => {
                 w.active = (w.text === current.word);
             });
             
+            console.log('활성화된 단어 수:', words.filter(w => w.active).length);
+            
             // 재생
             current.audio.currentTime = 0;
-            current.audio.play();
+            current.audio.play().then(() => {
+                console.log('오디오 재생 성공!');
+            }).catch(err => {
+                console.error('오디오 재생 실패:', err);
+            });
             
             // 다음 곡으로
             current.audio.onended = () => {
+                console.log('오디오 종료');
                 currentIndex++;
                 if (currentIndex < audioElements.length) {
                     playSequence();
