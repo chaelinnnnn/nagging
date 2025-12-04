@@ -320,7 +320,10 @@
                 if (file.type.startsWith('audio/')) {
                     const fileName = file.name.replace(/\.[^/.]+$/, '');
                     const parts = fileName.split('-');
-                    const word = parts.length > 1 ? parts.slice(1).join('-') : fileName;
+                    let word = parts.length > 1 ? parts.slice(1).join('-') : fileName;
+                    
+                    // 한글 정규화 (NFC)
+                    word = word.normalize('NFC');
                     
                     const audio = new Audio(URL.createObjectURL(file));
                     await new Promise(resolve => {
